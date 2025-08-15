@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片与提示词批量编辑工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <!-- 配置Tailwind自定义颜色和字体 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#F59E0B',
+                        danger: '#EF4444',
+                        dark: '#1E293B',
+                        light: '#F8FAFC'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .transition-height {
+                transition: max-height 0.3s ease-in-out;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .card-hover {
+                @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans text-gray-800 min-h-screen flex flex-col">
+    <!-- 顶部导航栏 -->
+    <header class="bg-white shadow-md sticky top-0 z-50 transition-all duration-300">
+        <div class="container mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center">
+            <div class="flex items-center mb-4 md:mb-0">
+                <i class="fa fa-picture-o text-primary text-3xl mr-3"></i>
+                <h1 class="text-2xl font-bold text-dark">图片与提示词批量编辑工具</h1>
+            </div>
+            
+            <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                <!-- 文件上传区域 -->
+                <label for="file-upload" class="flex items-center justify-center bg-primary hover:bg-primary/90 text-white font-medium py-2 px-4 rounded-lg cursor-pointer transition-all duration-300 shadow-md hover:shadow-lg">
+                    <i class="fa fa-upload mr-2"></i> 批量上传图片
+                </label>
+                <form id="upload-form" action="/upload" method="post" class="hidden" enctype="multipart/form-data">
+                    <input id="file-upload" type="file" name="files" multiple accept="image/*,.txt" 
+                           class="hidden" onchange="document.getElementById('upload-form').submit()">
+                </form>
+                
+                <button id="clear-all" class="flex items-center justify-center bg-danger hover:bg-danger/90 text-white font-medium py-2 px-4 rounded-lg cursor-pointer transition-all duration-300 shadow-md hover:shadow-lg">
+                    <i class="fa fa-trash mr-2"></i> 清空所有
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="flex-grow container mx-auto px-4 py-8">
+        <!-- 说明和统计信息 -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-8">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+                <h2 class="text-xl font-semibold text-dark flex items-center">
+                    <i class="fa fa-info-circle text-primary mr-2"></i> 使用说明
+                </h2>
+                <div class="mt-2 md:mt-0 bg-primary/10 text-primary px-4 py-2 rounded-lg font-medium">
+                    <i class="fa fa-picture-o mr-1"></i> 共 {{ image_count }} 张图片
+                </div>
+            </div>
+            <ul class="list-disc pl-5 space-y-2 text-gray-700">
+                <li>点击"批量上传图片"按钮上传图片文件（支持png, jpg, jpeg, gif格式）</li>
+                <li>系统会自动查找与图片同名的txt文件作为提示词</li>
+                <li>文本框A和B都可以直接编辑</li>
+                <li>"中译英"按钮：将文本框B的中文翻译为英文并显示在文本框A</li>
+                <li>"英译中"按钮：将文本框A的英文翻译为中文并显示在文本框B</li>
+                <li>"保存文档"按钮：将文本框A的内容保存为与图片名相同的txt文件</li>
+            </ul>
+        </div>
+        
+        <!-- 图片和文本编辑区域 -->
+        <div id="content-area" class="space-y-6">
+            <!-- 表头 -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 font-semibold text-gray-700 bg-gray-100 p-4 rounded-lg">
+                <div class="md:col-span-4">图片预览</div>
+                <div class="md:col-span-5">提示词编辑</div>
+                <div class="md:col-span-3">操作按钮</div>
+            </div>
+            
+            <!-- 图片和文本编辑行 -->
+            <div id="items-container" class="space-y-6">
+                {% for image in images %}
+                <div class="image-item grid grid-cols-1 md:grid-cols-12 gap-4 items-center bg-white rounded-xl shadow-md p-4 card-hover">
+                    <!-- 图片列 -->
+                    <div class="md:col-span-4 flex justify-center">
+                        <div class="relative max-w-full">
+                            <img src="{{ url_for('uploaded_file', filename=image) }}" 
+                                 alt="{{ image }}的预览图" 
+                                 class="max-h-48 md:max-h-64 object-contain rounded-lg shadow-sm">
+                            <div class="absolute top-2 right-2 bg-gray-800/70 text-white text-xs px-2 py-1 rounded">
+                                {{ image }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 文本编辑列 -->
+                    <div class="md:col-span-5 space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">提示词 (A)</label>
+                            <textarea class="caption-text-a w-full h-24 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all resize-none"
+                                      data-image="{{ image }}"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">翻译结果 (B)</label>
+                            <textarea class="caption-text-b w-full h-24 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all resize-none"
+                                      data-image="{{ image }}"></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- 按钮列 -->
+                    <div class="md:col-span-3 flex flex-col gap-3">
+                        <button class="translate-zh-to-en bg-accent hover:bg-accent/90 text-white font-medium py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center"
+                                data-image="{{ image }}">
+                            <i class="fa fa-language mr-2"></i> 中译英
+                        </button>
+                        <button class="translate-en-to-zh bg-secondary hover:bg-secondary/90 text-white font-medium py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center"
+                                data-image="{{ image }}">
+                            <i class="fa fa-language mr-2 fa-flip-horizontal"></i> 英译中
+                        </button>
+                        <button class="save-caption bg-primary hover:bg-primary/90 text-white font-medium py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center"
+                                data-image="{{ image }}">
+                            <i class="fa fa-save mr-2"></i> 保存文档
+                        </button>
+                    </div>
+                </div>
+                {% else %}
+                <!-- 没有图片时显示 -->
+                <div class="flex flex-col items-center justify-center bg-white rounded-xl shadow-md p-12 text-center">
+                    <i class="fa fa-picture-o text-gray-300 text-6xl mb-4"></i>
+                    <h3 class="text-xl font-medium text-gray-500 mb-2">暂无图片</h3>
+                    <p class="text-gray-400 mb-6">请点击上方的"批量上传图片"按钮添加图片</p>
+                    <label for="file-upload-placeholder" class="flex items-center justify-center bg-primary hover:bg-primary/90 text-white font-medium py-2 px-6 rounded-lg cursor-pointer transition-all duration-300 shadow-md hover:shadow-lg">
+                        <i class="fa fa-upload mr-2"></i> 上传图片
+                    </label>
+                    <input id="file-upload-placeholder" type="file" name="files" multiple accept="image/*,.txt" 
+                           class="hidden" onchange="document.getElementById('upload-form').submit()">
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white py-6">
+        <div class="container mx-auto px-4 text-center">
+            <p>图片与提示词批量编辑工具 &copy; 2023</p>
+            <p class="text-sm text-gray-400 mt-2">使用Flask和Tailwind CSS构建</p>
+        </div>
+    </footer>
+
+    <!-- 通知提示框 -->
+    <div id="notification" class="fixed bottom-5 right-5 px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center z-50"></div>
+
+    <script>
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 加载所有提示词
+            loadAllCaptions();
+            
+            // 为翻译按钮添加事件监听
+            document.querySelectorAll('.translate-zh-to-en').forEach(button => {
+                button.addEventListener('click', function() {
+                    translateZhToEn(this.dataset.image);
+                });
+            });
+            
+            document.querySelectorAll('.translate-en-to-zh').forEach(button => {
+                button.addEventListener('click', function() {
+                    translateEnToZh(this.dataset.image);
+                });
+            });
+            
+            // 为保存按钮添加事件监听
+            document.querySelectorAll('.save-caption').forEach(button => {
+                button.addEventListener('click', function() {
+                    saveCaption(this.dataset.image);
+                });
+            });
+            
+            // 为清空按钮添加事件监听
+            document.getElementById('clear-all').addEventListener('click', function() {
+                if (confirm('确定要清空所有图片和提示词吗？此操作不可恢复。')) {
+                    window.location.href = '/clear_all';
+                }
+            });
+            
+            // 滚动时改变导航栏样式
+            window.addEventListener('scroll', function() {
+                const header = document.querySelector('header');
+                if (window.scrollY > 10) {
+                    header.classList.add('py-2');
+                    header.classList.remove('py-4');
+                } else {
+                    header.classList.add('py-4');
+                    header.classList.remove('py-2');
+                }
+            });
+        });
+        
+        // 加载所有提示词
+        function loadAllCaptions() {
+            document.querySelectorAll('.image-item').forEach(item => {
+                const imageName = item.querySelector('.caption-text-a').dataset.image;
+                loadCaption(imageName);
+            });
+        }
+        
+        // 加载指定图片的提示词
+        function loadCaption(imageName) {
+            fetch(`/get_caption/${imageName}`)
+                .then(response => response.json())
+                .then(data => {
+                    const textareaA = document.querySelector(`.caption-text-a[data-image="${imageName}"]`);
+                    if (textareaA) {
+                        textareaA.value = data.caption;
+                    }
+                })
+                .catch(error => {
+                    showNotification('加载提示词失败', 'error');
+                    console.error('Error loading caption:', error);
+                });
+        }
+        
+        // 中译英：将文本框B的中文翻译为英文并显示在文本框A
+        function translateZhToEn(imageName) {
+            const textareaA = document.querySelector(`.caption-text-a[data-image="${imageName}"]`);
+            const textareaB = document.querySelector(`.caption-text-b[data-image="${imageName}"]`);
+            const button = document.querySelector(`.translate-zh-to-en[data-image="${imageName}"]`);
+            
+            const text = textareaB.value;
+            if (!text.trim()) {
+                showNotification('请先在文本框B输入要翻译的中文内容', 'warning');
+                return;
+            }
+            
+            // 显示加载状态
+            button.disabled = true;
+            button.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> 翻译中...';
+            
+            fetch('/translate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    text: text,
+                    src: 'zh',  // 百度翻译API中文代码
+                    dest: 'en'  // 百度翻译API英文代码
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                textareaA.value = data.translated;
+                showNotification('中译英成功', 'success');
+            })
+            .catch(error => {
+                showNotification('翻译失败，请重试', 'error');
+                console.error('Translation error:', error);
+            })
+            .finally(() => {
+                // 恢复按钮状态
+                button.disabled = false;
+                button.innerHTML = '<i class="fa fa-language mr-2"></i> 中译英';
+            });
+        }
+        
+        // 英译中：将文本框A的英文翻译为中文并显示在文本框B
+        function translateEnToZh(imageName) {
+            const textareaA = document.querySelector(`.caption-text-a[data-image="${imageName}"]`);
+            const textareaB = document.querySelector(`.caption-text-b[data-image="${imageName}"]`);
+            const button = document.querySelector(`.translate-en-to-zh[data-image="${imageName}"]`);
+            
+            const text = textareaA.value;
+            if (!text.trim()) {
+                showNotification('请先在文本框A输入要翻译的英文内容', 'warning');
+                return;
+            }
+            
+            // 显示加载状态
+            button.disabled = true;
+            button.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> 翻译中...';
+            
+            fetch('/translate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    text: text,
+                    src: 'en',  // 百度翻译API英文代码
+                    dest: 'zh'  // 百度翻译API中文代码
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                textareaB.value = data.translated;
+                showNotification('英译中成功', 'success');
+            })
+            .catch(error => {
+                showNotification('翻译失败，请重试', 'error');
+                console.error('Translation error:', error);
+            })
+            .finally(() => {
+                // 恢复按钮状态
+                button.disabled = false;
+                button.innerHTML = '<i class="fa fa-language mr-2 fa-flip-horizontal"></i> 英译中';
+            });
+        }
+        
+        // 保存提示词
+        function saveCaption(imageName) {
+            const textareaA = document.querySelector(`.caption-text-a[data-image="${imageName}"]`);
+            const button = document.querySelector(`.save-caption[data-image="${imageName}"]`);
+            
+            const content = textareaA.value;
+            
+            // 显示保存状态
+            button.disabled = true;
+            button.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> 保存中...';
+            
+            fetch(`/save_caption/${imageName}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ content: content })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('提示词保存成功', 'success');
+                } else {
+                    showNotification('提示词保存失败', 'error');
+                }
+            })
+            .catch(error => {
+                showNotification('保存失败，请重试', 'error');
+                console.error('Save error:', error);
+            })
+            .finally(() => {
+                // 恢复按钮状态
+                button.disabled = false;
+                button.innerHTML = '<i class="fa fa-save mr-2"></i> 保存文档';
+            });
+        }
+        
+        // 显示通知提示
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            
+            // 设置通知类型样式
+            notification.className = 'fixed bottom-5 right-5 px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center z-50';
+            
+            if (type === 'success') {
+                notification.classList.add('bg-green-500', 'text-white');
+                notification.innerHTML = `<i class="fa fa-check-circle mr-2"></i> ${message}`;
+            } else if (type === 'error') {
+                notification.classList.add('bg-red-500', 'text-white');
+                notification.innerHTML = `<i class="fa fa-times-circle mr-2"></i> ${message}`;
+            } else if (type === 'warning') {
+                notification.classList.add('bg-yellow-500', 'text-white');
+                notification.innerHTML = `<i class="fa fa-exclamation-triangle mr-2"></i> ${message}`;
+            } else {
+                notification.classList.add('bg-blue-500', 'text-white');
+                notification.innerHTML = `<i class="fa fa-info-circle mr-2"></i> ${message}`;
+            }
+            
+            // 显示通知
+            setTimeout(() => {
+                notification.classList.remove('translate-y-20', 'opacity-0');
+            }, 10);
+            
+            // 3秒后隐藏通知
+            setTimeout(() => {
+                notification.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
+    
