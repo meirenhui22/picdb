@@ -19,8 +19,8 @@ if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
 # 百度翻译API配置 - 请替换为您自己的appid和appkey
-BAIDU_APPID = '20250730002419271'
-BAIDU_APPKEY = 'cNNrw97d7vjTMHvatf4K'
+BAIDU_APPID = '你的appid'
+BAIDU_APPKEY = '你的appkey'
 BAIDU_ENDPOINT = 'http://api.fanyi.baidu.com'
 BAIDU_PATH = '/api/trans/vip/translate'
 BAIDU_URL = BAIDU_ENDPOINT + BAIDU_PATH
