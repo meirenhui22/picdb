@@ -47,7 +47,7 @@ pip install -r requirements.txt
 
 
 
-1.  配置百度翻译 API
+1.  配置百度翻译 API：https://api.fanyi.baidu.com/
 
 *   注册百度翻译开放平台账号并创建应用，获取`appid`和`appkey`
 
